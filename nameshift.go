@@ -44,6 +44,7 @@ func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
 	log.Debug(qname)
+	log.Debug("Creating records")
 
 	var rrs []dns.RR
 	var authoritive []dns.RR
@@ -67,6 +68,8 @@ func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		},
 		Ns: "ns2.nameshift.com",
 	})
+
+	log.Debug("Created authoritive")
 
 	switch qtype {
 	case "A":
