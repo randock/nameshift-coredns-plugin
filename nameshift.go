@@ -4,10 +4,12 @@ package nameshift
 
 import (
 	"context"
+	"net"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 )
@@ -24,39 +26,88 @@ type Nameshift struct {
 // ServeDNS implements the plugin.Handler interface. This method gets called when nameshift is used
 // in a Server.
 func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	// This function could be simpler. I.e. just fmt.Println("nameshift") here, but we want to show
-	// a slightly more complex nameshift as to make this more interesting.
-	// Here we wrap the dns.ResponseWriter in a new ResponseWriter and call the next plugin, when the
-	// answer comes back, it will print "nameshift".
+	if e.handleDns(w, r) {
+		// Export metric with the server label set to the current server handling the request.
+		requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
 
-	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
-	log.Debug("Received response")
-
-	// Wrap.
-	pw := NewResponsePrinter(w)
-
-	// Export metric with the server label set to the current server handling the request.
-	requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
+		return dns.RcodeSuccess, nil
+	}
 
 	// Call next plugin (if any).
-	return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
+	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
+}
+
+func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
+	state := request.Request{W: w, Req: r}
+
+	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
+	log.Debug(state.Name())
+
+	if len(r.Question) == 0 {
+		return false
+	}
+
+	var rrs []dns.RR
+	var authoritive []dns.RR
+
+	authoritive = append(authoritive, &dns.NS{
+		Hdr: dns.RR_Header{
+			Name:   state.Name(),
+			Rrtype: dns.TypeNS,
+			Class:  dns.ClassINET,
+			Ttl:    60,
+		},
+		Ns: "ns1.nameshift.com",
+	})
+	authoritive = append(authoritive, &dns.NS{
+		Hdr: dns.RR_Header{
+			Name:   state.Name(),
+			Rrtype: dns.TypeNS,
+			Class:  dns.ClassINET,
+			Ttl:    60,
+		},
+		Ns: "ns2.nameshift.com",
+	})
+
+	for i := 0; i < len(r.Question); i++ {
+		question := r.Question[i]
+		if question.Qclass != dns.ClassINET {
+			continue
+		}
+
+		if question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA {
+			continue
+		}
+
+		rrs = append(rrs, &dns.A{
+			Hdr: dns.RR_Header{
+				Name:   question.Name,
+				Rrtype: dns.TypeAAAA,
+				Class:  dns.ClassINET,
+				Ttl:    60,
+			},
+			A: net.ParseIP("123.123.123.123"),
+		})
+
+		rrs = append(rrs, &dns.AAAA{
+			Hdr: dns.RR_Header{
+				Name:   question.Name,
+				Rrtype: dns.TypeAAAA,
+				Class:  dns.ClassINET,
+				Ttl:    60,
+			},
+			AAAA: net.ParseIP("2a09:8280:1::50:73de:0"),
+		})
+	}
+
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Answer = rrs
+	m.Ns = authoritive
+	_ = w.WriteMsg(m)
+
+	return true
 }
 
 // Name implements the Handler interface.
 func (e Nameshift) Name() string { return "nameshift" }
-
-// ResponsePrinter wrap a dns.ResponseWriter and will write nameshift to standard output when WriteMsg is called.
-type ResponsePrinter struct {
-	dns.ResponseWriter
-}
-
-// NewResponsePrinter returns ResponseWriter.
-func NewResponsePrinter(w dns.ResponseWriter) *ResponsePrinter {
-	return &ResponsePrinter{ResponseWriter: w}
-}
-
-// WriteMsg calls the underlying ResponseWriter's WriteMsg method and prints "nameshift" to standard output.
-func (r *ResponsePrinter) WriteMsg(res *dns.Msg) error {
-	log.Info("nameshift")
-	return r.ResponseWriter.WriteMsg(res)
-}
