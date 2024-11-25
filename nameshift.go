@@ -39,13 +39,11 @@ func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 
 func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	state := request.Request{W: w, Req: r}
+	qname := state.Name()
+	qtype := state.Type()
 
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
-	log.Debug(state.Name())
-
-	if len(r.Question) == 0 {
-		return false
-	}
+	log.Debug(qname)
 
 	var rrs []dns.RR
 	var authoritive []dns.RR
@@ -69,29 +67,21 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		Ns: "ns2.nameshift.com",
 	})
 
-	for i := 0; i < len(r.Question); i++ {
-		question := r.Question[i]
-		if question.Qclass != dns.ClassINET {
-			continue
-		}
-
-		if question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA {
-			continue
-		}
-
+	switch qtype {
+	case "A":
 		rrs = append(rrs, &dns.A{
 			Hdr: dns.RR_Header{
-				Name:   question.Name,
+				Name:   dns.Fqdn(qname),
 				Rrtype: dns.TypeAAAA,
 				Class:  dns.ClassINET,
 				Ttl:    60,
 			},
 			A: net.ParseIP("123.123.123.123"),
 		})
-
+	case "AAAA":
 		rrs = append(rrs, &dns.AAAA{
 			Hdr: dns.RR_Header{
-				Name:   question.Name,
+				Name:   dns.Fqdn(qname),
 				Rrtype: dns.TypeAAAA,
 				Class:  dns.ClassINET,
 				Ttl:    60,
@@ -104,9 +94,14 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	m.SetReply(r)
 	m.Answer = rrs
 	m.Ns = authoritive
+	m.Authoritative = true
+
+	state.SizeAndDo(m)
+	m = state.Scrub(m)
 	_ = w.WriteMsg(m)
 
 	return true
+
 }
 
 // Name implements the Handler interface.
