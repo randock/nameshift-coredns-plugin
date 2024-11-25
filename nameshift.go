@@ -50,7 +50,7 @@ func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 
 	authoritive = append(authoritive, &dns.NS{
 		Hdr: dns.RR_Header{
-			Name:   state.Name(),
+			Name:   dns.Fqdn(qname),
 			Rrtype: dns.TypeNS,
 			Class:  dns.ClassINET,
 			Ttl:    60,
@@ -60,7 +60,7 @@ func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 
 	authoritive = append(authoritive, &dns.NS{
 		Hdr: dns.RR_Header{
-			Name:   state.Name(),
+			Name:   dns.Fqdn(qname),
 			Rrtype: dns.TypeNS,
 			Class:  dns.ClassINET,
 			Ttl:    60,
@@ -89,7 +89,11 @@ func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			},
 			AAAA: net.ParseIP("2a09:8280:1::50:73de:0"),
 		})
+	default:
+		return false
 	}
+
+	log.Debug("Sending reply")
 
 	m := new(dns.Msg)
 	m.SetReply(r)
