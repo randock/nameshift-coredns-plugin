@@ -1,4 +1,4 @@
-module github.com/randock/nameshift-coredns
+module github.com/randock/nameshift-coredns-plugin
 
 go 1.23.2
 
