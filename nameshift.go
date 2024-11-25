@@ -25,7 +25,7 @@ type Nameshift struct {
 
 // ServeDNS implements the plugin.Handler interface. This method gets called when nameshift is used
 // in a Server.
-func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (e *Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	if e.handleDns(w, r) {
 		// Export metric with the server label set to the current server handling the request.
 		requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
@@ -37,7 +37,7 @@ func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 }
 
-func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
+func (e *Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	state := request.Request{W: w, Req: r}
 	qname := state.Name()
 	qtype := state.Type()
@@ -57,6 +57,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		},
 		Ns: "ns1.nameshift.com",
 	})
+
 	authoritive = append(authoritive, &dns.NS{
 		Hdr: dns.RR_Header{
 			Name:   state.Name(),
@@ -92,17 +93,14 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 
 	m := new(dns.Msg)
 	m.SetReply(r)
+	m.Authoritative = true
 	m.Answer = rrs
 	m.Ns = authoritive
-	m.Authoritative = true
-
-	state.SizeAndDo(m)
-	m = state.Scrub(m)
-	_ = w.WriteMsg(m)
+	w.WriteMsg(m)
 
 	return true
 
 }
 
 // Name implements the Handler interface.
-func (e Nameshift) Name() string { return "nameshift" }
+func (e *Nameshift) Name() string { return "nameshift" }
