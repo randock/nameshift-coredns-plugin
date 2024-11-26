@@ -49,7 +49,7 @@ type Nameshift struct {
 
 func (e Nameshift) loadRecords(ctx context.Context) {
 	// clear out
-	clear(e.zone)
+	e.zone = make(map[string]RedisRecord)
 
 	// set new update time and serial
 	e.lastUpdate = time.Now()
@@ -198,7 +198,6 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	qtype := state.Type()
 	fqdn := dns.Fqdn(state.Name())
 
-	// grab punycode version
 	root, err := publicsuffix.EffectiveTLDPlusOne(strings.TrimRight(state.Name(), "."))
 	if err != nil {
 		log.Error(fmt.Errorf("could not get root name %s %v", state.Name(), err))
