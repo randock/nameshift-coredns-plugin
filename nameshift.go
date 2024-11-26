@@ -252,6 +252,8 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		}
 	case "SOA":
 		rrs = append(rrs, newSOA(fqdn, serial))
+	case "NS":
+		rrs = append(rrs, authoritive...)
 	case "A":
 		if sub == "www" || sub == "" {
 			if redisRecordFound {
