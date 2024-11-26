@@ -25,10 +25,14 @@ import (
 // Define log to be a logger with the plugin name in it. This way we can just use log.Info and
 // friends to log.
 var log = clog.NewWithPlugin("nameshift")
-var mutex sync.Mutex
+var generatorMutex sync.Mutex = sync.Mutex{}
+var mutex sync.RWMutex = sync.RWMutex{}
+
+var lastUpdate time.Time = time.Now()
+var serial uint32
 
 const (
-	updateFrequency = 10 * time.Minute
+	updateFrequency = 3 * time.Second
 )
 
 type RedisRecord struct {
@@ -44,21 +48,14 @@ type Nameshift struct {
 	Prefix string
 	Client *redis.Client
 
-	zone       map[string]RedisRecord
-	lastUpdate time.Time
-	serial     uint32
+	zone map[string]RedisRecord
 }
 
 func (e Nameshift) loadRecords(ctx context.Context) {
-	if !mutex.TryLock() {
-		return
-	}
-
+	mutex.Lock()
 	defer mutex.Unlock()
 
-	// set new update time and serial
-	e.lastUpdate = time.Now()
-	e.serial = uint32(time.Now().Unix())
+	log.Debug(fmt.Sprintf("Loading zone file, last update %s.", lastUpdate))
 
 	// clear out
 	for key := range e.zone {
@@ -104,12 +101,21 @@ func (e Nameshift) loadRecords(ctx context.Context) {
 // ServeDNS implements the plugin.Handler interface. This method gets called when nameshift is used
 // in a Server.
 func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	if len(e.zone) == 0 {
-		log.Debug("Loading zone file, because it is empty.")
-		e.loadRecords(ctx)
-	} else if time.Since(e.lastUpdate) > updateFrequency {
-		log.Debug("Loading zone file, because > time.")
-		defer e.loadRecords(ctx)
+	if generatorMutex.TryLock() {
+		mutex.RLock()
+		zoneLength := len(e.zone)
+		mutex.RUnlock()
+
+		if zoneLength == 0 {
+			e.loadRecords(ctx)
+		} else if time.Since(lastUpdate) > updateFrequency {
+			lastUpdate = time.Now()
+			serial = uint32(time.Now().Unix())
+
+			defer e.loadRecords(ctx)
+		}
+
+		generatorMutex.Unlock()
 	}
 
 	if e.handleDns(w, r) {
@@ -218,10 +224,14 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	sub := strings.TrimRight(state.Name(), root)
 
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
-	log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
+	// log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
 
-	// found?
+	// lookup record in map
+	mutex.RLock()
 	val, redisRecordFound := e.zone[root]
+	mutex.RUnlock()
+
+	// create rrs
 	var rrs []dns.RR
 	var authoritive []dns.RR
 
@@ -241,7 +251,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			rrs = append(rrs, newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
-		rrs = append(rrs, newSOA(fqdn, e.serial))
+		rrs = append(rrs, newSOA(fqdn, serial))
 	case "A":
 		if sub == "www" || sub == "" {
 			if redisRecordFound {

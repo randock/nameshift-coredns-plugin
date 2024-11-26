@@ -1,8 +1,6 @@
 package nameshift
 
 import (
-	"time"
-
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
@@ -64,12 +62,10 @@ func setup(d *caddy.Controller) error {
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(d).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return Nameshift{
-			Next:       next,
-			Client:     client,
-			Prefix:     prefix,
-			zone:       make(map[string]RedisRecord),
-			lastUpdate: time.Now(),
-			serial:     uint32(time.Now().Unix()),
+			Next:   next,
+			Client: client,
+			Prefix: prefix,
+			zone:   make(map[string]RedisRecord),
 		}
 	})
 
