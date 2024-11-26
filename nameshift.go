@@ -49,7 +49,9 @@ type Nameshift struct {
 
 func (e Nameshift) loadRecords(ctx context.Context) {
 	// clear out
-	e.zone = make(map[string]RedisRecord)
+	for key := range e.zone {
+		delete(e.zone, key)
+	}
 
 	// set new update time and serial
 	e.lastUpdate = time.Now()
