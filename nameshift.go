@@ -221,7 +221,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	}
 
 	// sub
-	sub := strings.TrimRight(state.Name(), root)
+	sub := strings.TrimSuffix(strings.TrimSuffix(state.Name(), root+"."), ".")
 
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
 	// log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
@@ -254,14 +254,6 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		rrs = append(rrs, newSOA(fqdn, serial))
 	case "NS":
 		rrs = append(rrs, authoritive...)
-	case "A":
-		if sub == "www" || sub == "" {
-			if redisRecordFound {
-				rrs = append(rrs, newA(fqdn, val.A))
-			} else {
-				rrs = append(rrs, newA(fqdn, "137.66.53.129"))
-			}
-		}
 	case "CAA":
 		rrs = append(
 			rrs,
@@ -271,6 +263,14 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			NewCAA(fqdn, 0, "issue", "pki.goog"),
 			NewCAA(fqdn, 0, "issue", "sectigo.com"),
 		)
+	case "A":
+		if sub == "www" || sub == "" {
+			if redisRecordFound {
+				rrs = append(rrs, newA(fqdn, val.A))
+			} else {
+				rrs = append(rrs, newA(fqdn, "137.66.53.129"))
+			}
+		}
 	case "AAAA":
 		if sub == "www" || sub == "" {
 			if redisRecordFound {
