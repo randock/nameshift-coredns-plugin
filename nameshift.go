@@ -32,7 +32,7 @@ var lastUpdate time.Time = time.Now()
 var serial uint32
 
 const (
-	updateFrequency = 3 * time.Second
+	updateFrequency = 5 * time.Minute
 )
 
 type RedisRecord struct {
