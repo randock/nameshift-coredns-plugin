@@ -9,6 +9,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
@@ -24,6 +25,7 @@ import (
 // Define log to be a logger with the plugin name in it. This way we can just use log.Info and
 // friends to log.
 var log = clog.NewWithPlugin("nameshift")
+var mutex sync.Mutex
 
 const (
 	updateFrequency = 10 * time.Minute
@@ -48,14 +50,20 @@ type Nameshift struct {
 }
 
 func (e Nameshift) loadRecords(ctx context.Context) {
-	// clear out
-	for key := range e.zone {
-		delete(e.zone, key)
+	if !mutex.TryLock() {
+		return
 	}
+
+	defer mutex.Unlock()
 
 	// set new update time and serial
 	e.lastUpdate = time.Now()
 	e.serial = uint32(time.Now().Unix())
+
+	// clear out
+	for key := range e.zone {
+		delete(e.zone, key)
+	}
 
 	var pointer uint64 = 0
 	var scanCount int64 = 1000
