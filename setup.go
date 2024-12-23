@@ -23,6 +23,7 @@ func setup(d *caddy.Controller) error {
 	username := DefaultRedisUsername
 	password := ""
 	prefix := ""
+	ns3 := false
 
 	for d.Next() {
 		key := d.Val()
@@ -49,6 +50,8 @@ func setup(d *caddy.Controller) error {
 			if value != "" {
 				prefix = value
 			}
+		case "add_ns3":
+			ns3 = true
 		}
 	}
 
@@ -65,6 +68,7 @@ func setup(d *caddy.Controller) error {
 			Next:   next,
 			Client: client,
 			Prefix: prefix,
+			AddNs3: ns3,
 			zone:   make(map[string]RedisRecord),
 		}
 	})
