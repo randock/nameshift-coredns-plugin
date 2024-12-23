@@ -47,8 +47,8 @@ type Nameshift struct {
 	Next   plugin.Handler
 	Client *redis.Client
 
-	Prefix string
-	AddNs3 bool
+	Prefix      string
+	AddNs3      bool
 	Nameservers []string
 
 	zone map[string]RedisRecord
@@ -247,6 +247,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 
 	if e.AddNs3 && redisRecordFound {
 		authoritive = append(authoritive, newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
+	}
 
 	switch qtype {
 	case "TXT":
