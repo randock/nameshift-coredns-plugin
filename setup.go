@@ -24,6 +24,7 @@ func setup(d *caddy.Controller) error {
 	password := ""
 	prefix := ""
 	ns3 := false
+	ns := []string{}
 
 	for d.Next() {
 		key := d.Val()
@@ -50,8 +51,12 @@ func setup(d *caddy.Controller) error {
 			if value != "" {
 				prefix = value
 			}
-		case "add_ns3":
+		case "ns3":
 			ns3 = true
+		case "ns":
+			if value != "" {
+				ns = append(ns, value)
+			}
 		}
 	}
 
@@ -65,11 +70,12 @@ func setup(d *caddy.Controller) error {
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(d).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return Nameshift{
-			Next:   next,
-			Client: client,
-			Prefix: prefix,
-			AddNs3: ns3,
-			zone:   make(map[string]RedisRecord),
+			Next:        next,
+			Client:      client,
+			Prefix:      prefix,
+			AddNs3:      ns3,
+			Nameservers: ns,
+			zone:        make(map[string]RedisRecord),
 		}
 	})
 

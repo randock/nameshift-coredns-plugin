@@ -49,6 +49,7 @@ type Nameshift struct {
 
 	Prefix string
 	AddNs3 bool
+	Nameservers []string
 
 	zone map[string]RedisRecord
 }
@@ -193,7 +194,7 @@ func newTXT(fqdn string, txt []string) dns.RR {
 	}
 }
 
-func newSOA(fqdn string, serial uint32) dns.RR {
+func newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 	return &dns.SOA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -201,7 +202,7 @@ func newSOA(fqdn string, serial uint32) dns.RR {
 			Class:  dns.ClassINET,
 			Ttl:    300,
 		},
-		Ns:      "ns1.nameshift.com.",
+		Ns:      mainNs,
 		Mbox:    "hostmaster.nameshift.com.",
 		Refresh: 60 * 60,
 		Retry:   uint32(math.Round(60 * 60 * 1 * 1 / 3)),
@@ -215,9 +216,6 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	state := request.Request{W: w, Req: r}
 	qtype := state.Type()
 	fqdn := dns.Fqdn(state.Name())
-
-	log.Debug(fmt.Sprintf("Local Addr: %s", state.LocalAddr()))
-	log.Debug(fmt.Sprintf("Local IP: %s", state.LocalIP()))
 
 	root, err := publicsuffix.EffectiveTLDPlusOne(strings.TrimRight(state.Name(), "."))
 	if err != nil {
@@ -240,15 +238,15 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	var rrs []dns.RR
 	var authoritive []dns.RR
 
-	authoritive = append(
-		authoritive,
-		newNS(fqdn, "ns1.nameshift.com."),
-		newNS(fqdn, "ns2.nameshift.com."),
-	)
+	for _, value := range e.Nameservers {
+		authoritive = append(
+			authoritive,
+			newNS(fqdn, value),
+		)
+	}
 
 	if e.AddNs3 && redisRecordFound {
 		authoritive = append(authoritive, newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
-	}
 
 	switch qtype {
 	case "TXT":
@@ -256,7 +254,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			rrs = append(rrs, newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
-		rrs = append(rrs, newSOA(fqdn, serial))
+		rrs = append(rrs, newSOA(e.Nameservers[0], fqdn, serial))
 	case "NS":
 		rrs = append(rrs, authoritive...)
 	case "CAA":
