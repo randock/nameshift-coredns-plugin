@@ -30,6 +30,10 @@ func setup(d *caddy.Controller) error {
 		key := d.Val()
 		var value string
 
+		if key == "ns3" {
+			ns3 = true
+		}
+
 		if !d.Args(&value) {
 			continue
 		}
@@ -51,8 +55,6 @@ func setup(d *caddy.Controller) error {
 			if value != "" {
 				prefix = value
 			}
-		case "ns3":
-			ns3 = true
 		case "ns":
 			if value != "" {
 				ns = append(ns, value)
