@@ -272,7 +272,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			if redisRecordFound {
 				rrs = append(rrs, newA(fqdn, val.A))
 			} else {
-				rrs = append(rrs, newA(fqdn, "137.66.53.129"))
+				rrs = append(rrs, newA(fqdn, "168.220.85.117"))
 			}
 		}
 	case "AAAA":
@@ -280,7 +280,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 			if redisRecordFound {
 				rrs = append(rrs, newAAAA(fqdn, val.Aaaa))
 			} else {
-				rrs = append(rrs, newAAAA(fqdn, "2a09:8280:1::2e:ea89:0"))
+				rrs = append(rrs, newAAAA(fqdn, "2a09:8280:1::50:73de:0"))
 			}
 		}
 	}
