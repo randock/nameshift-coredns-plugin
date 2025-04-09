@@ -39,7 +39,7 @@ type RedisRecord struct {
 	SidnIdcode *string `json:"sidnIdcode"`
 	Identifier string  `json:"identifier"`
 	A          string  `json:"a"`
-	Aaaa       string  `json:"aaaa"`
+	Aaaa       *string `json:"aaaa"`
 }
 
 // Nameshift is an nameshift plugin to show how to write a plugin.
@@ -278,7 +278,9 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	case "AAAA":
 		if sub == "www" || sub == "" {
 			if redisRecordFound {
-				rrs = append(rrs, newAAAA(fqdn, val.Aaaa))
+				if val.Aaaa != nil {
+					rrs = append(rrs, newAAAA(fqdn, *val.Aaaa))
+				}
 			} else {
 				rrs = append(rrs, newAAAA(fqdn, "2a09:8280:1::50:73de:0"))
 			}
