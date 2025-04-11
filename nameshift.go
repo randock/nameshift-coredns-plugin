@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
@@ -25,6 +26,10 @@ import (
 // friends to log.
 var log = clog.NewWithPlugin("nameshift")
 var mutex sync.RWMutex = sync.RWMutex{}
+
+const (
+	TTL = 900
+)
 
 var serial uint32
 
@@ -86,7 +91,7 @@ func NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeCAA,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		Flag:  flag,
 		Tag:   tag,
@@ -100,7 +105,7 @@ func newNS(fqdn string, authority string) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeNS,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		Ns: authority,
 	}
@@ -112,7 +117,7 @@ func newA(fqdn string, a string) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		A: net.ParseIP(a),
 	}
@@ -124,7 +129,7 @@ func newAAAA(fqdn string, aaaa string) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeAAAA,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		AAAA: net.ParseIP(aaaa),
 	}
@@ -136,7 +141,7 @@ func newTXT(fqdn string, txt []string) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeTXT,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		Txt: txt,
 	}
@@ -148,7 +153,7 @@ func newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 			Name:   fqdn,
 			Rrtype: dns.TypeSOA,
 			Class:  dns.ClassINET,
-			Ttl:    300,
+			Ttl:    TTL,
 		},
 		Ns:      mainNs,
 		Mbox:    "hostmaster.nameshift.com.",
@@ -156,7 +161,7 @@ func newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 		Retry:   uint32(math.Round(60 * 60 * 1 * 1 / 3)),
 		Expire:  60 * 60 * 24 * 7,
 		Minttl:  60 * 60 * 1,
-		Serial:  serial,
+		Serial:  uint32(time.Now().Unix()),
 	}
 }
 
