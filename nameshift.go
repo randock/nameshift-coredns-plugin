@@ -32,7 +32,7 @@ var lastUpdate time.Time = time.Now()
 var serial uint32
 
 const (
-	updateFrequency = 5 * time.Minute
+	updateFrequency = 15 * time.Minute
 )
 
 type RedisRecord struct {
@@ -262,10 +262,7 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 		rrs = append(
 			rrs,
 			NewCAA(fqdn, 0, "issue", "letsencrypt.org"),
-			NewCAA(fqdn, 0, "issue", "buypass.com"),
-			NewCAA(fqdn, 0, "issue", "ssl.com"),
 			NewCAA(fqdn, 0, "issue", "pki.goog"),
-			NewCAA(fqdn, 0, "issue", "sectigo.com"),
 		)
 	case "A":
 		if sub == "www" || sub == "" {
