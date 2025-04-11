@@ -3,12 +3,12 @@ module x
 go 1.23.2
 
 require (
-	github.com/DanielOaks/go-idn v0.0.0-20160120021903-76db0e10dc65
 	github.com/coredns/caddy v1.1.2-0.20241029205200-8de985351a98
 	github.com/coredns/coredns v1.12.0
 	github.com/miekg/dns v1.1.62
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.7.0
+	golang.org/x/net v0.31.0
 )
 
 require (
@@ -33,7 +33,6 @@ require (
 	golang.org/x/crypto v0.29.0 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/net v0.31.0 // indirect
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.20.0 // indirect

@@ -10,7 +10,6 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
@@ -25,15 +24,9 @@ import (
 // Define log to be a logger with the plugin name in it. This way we can just use log.Info and
 // friends to log.
 var log = clog.NewWithPlugin("nameshift")
-var generatorMutex sync.Mutex = sync.Mutex{}
 var mutex sync.RWMutex = sync.RWMutex{}
 
-var lastUpdate time.Time = time.Now()
 var serial uint32
-
-const (
-	updateFrequency = 15 * time.Minute
-)
 
 type RedisRecord struct {
 	SidnIdcode *string `json:"sidnIdcode"`
@@ -54,74 +47,29 @@ type Nameshift struct {
 	zone map[string]RedisRecord
 }
 
-func (e Nameshift) loadRecords(ctx context.Context) {
+func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	log.Debug(fmt.Sprintf("Loading zone file, last update %s.", lastUpdate))
-
-	// clear out
-	for key := range e.zone {
-		delete(e.zone, key)
+	val := e.Client.Get(ctx, "identifier/"+domain)
+	if val.Err() != nil {
+		log.Error(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
+		return nil, val.Err()
 	}
 
-	var pointer uint64 = 0
-	var scanCount int64 = 1000
-
-	for {
-		// Scan for keys matching the search query and iterate until all found
-		keys, nextPointer, err := e.Client.ScanType(ctx, pointer, e.Prefix+"*", scanCount, "string").Result()
-		if err != nil {
-			log.Error(fmt.Errorf("unable to scan path %v", err))
-			return
-		}
-
-		values, err := e.Client.MGet(ctx, keys...).Result()
-		if err != nil {
-			log.Error(fmt.Errorf("could not get values"))
-			return
-		}
-
-		for key, value := range values {
-			record := &RedisRecord{}
-			if err := json.Unmarshal([]byte(value.(string)), record); err != nil {
-				log.Error(fmt.Errorf("unable to unmarshal value for %s: %v", keys[key], err))
-				continue
-			}
-
-			name := strings.TrimPrefix(keys[key], e.Prefix)
-			e.zone[name] = *record
-		}
-
-		// End of results reached
-		if nextPointer == 0 {
-			break
-		}
-		pointer = nextPointer
+	record := &RedisRecord{}
+	if err := json.Unmarshal([]byte(val.Val()), record); err != nil {
+		log.Error(fmt.Errorf("unable to unmarshal value for %s: %v", domain, err))
+		return nil, err
 	}
+
+	return record, nil
 }
 
 // ServeDNS implements the plugin.Handler interface. This method gets called when nameshift is used
 // in a Server.
 func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	if generatorMutex.TryLock() {
-		mutex.RLock()
-		zoneLength := len(e.zone)
-		mutex.RUnlock()
-
-		if zoneLength == 0 {
-			e.loadRecords(ctx)
-		} else if time.Since(lastUpdate) > updateFrequency {
-			lastUpdate = time.Now()
-			serial = uint32(time.Now().Unix())
-
-			defer e.loadRecords(ctx)
-		}
-
-		generatorMutex.Unlock()
-	}
-
-	if e.handleDns(w, r) {
+	if e.handleDns(ctx, w, r) {
 		// Export metric with the server label set to the current server handling the request.
 		requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
 
@@ -212,7 +160,7 @@ func newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 	}
 }
 
-func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
+func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) bool {
 	state := request.Request{W: w, Req: r}
 	qtype := state.Type()
 	fqdn := dns.Fqdn(state.Name())
@@ -227,12 +175,16 @@ func (e Nameshift) handleDns(w dns.ResponseWriter, r *dns.Msg) bool {
 	sub := strings.TrimSuffix(strings.TrimSuffix(state.Name(), root+"."), ".")
 
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
-	// log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
+	log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
 
 	// lookup record in map
-	mutex.RLock()
-	val, redisRecordFound := e.zone[root]
-	mutex.RUnlock()
+	val, err := e.loadRecord(ctx, root)
+	if err != nil {
+		log.Error(fmt.Errorf("could not get record for %s: %v", root, err))
+		return false
+	}
+
+	redisRecordFound := val != nil
 
 	// create rrs
 	var rrs []dns.RR
