@@ -58,7 +58,7 @@ func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord,
 
 	val := e.Client.Get(ctx, "identifier/"+domain)
 	if val.Err() != nil {
-		log.Error(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
+		log.Debug(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
 		return nil, val.Err()
 	}
 
@@ -185,8 +185,7 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	// lookup record in map
 	val, err := e.loadRecord(ctx, root)
 	if err != nil {
-		log.Error(fmt.Errorf("could not get record for %s: %v", root, err))
-		return false
+		log.Debug(fmt.Errorf("could not get record for %s: %v", root, err))
 	}
 
 	redisRecordFound := val != nil
@@ -208,7 +207,7 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 
 	switch qtype {
 	case "TXT":
-		if sub == "_for-sale" && val.SidnIdcode != nil {
+		if sub == "_for-sale" && redisRecordFound && val.SidnIdcode != nil {
 			rrs = append(rrs, newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
