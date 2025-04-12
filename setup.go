@@ -83,7 +83,7 @@ func setup(d *caddy.Controller) error {
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(d).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return Nameshift{
+		return &Nameshift{
 			Next:        next,
 			Client:      client,
 			Prefix:      prefix,
