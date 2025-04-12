@@ -48,9 +48,8 @@ func (e *Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord
 	// log context error
 	log.Debug(fmt.Errorf("context error: %v", ctx.Err()))
 
-	redisContext, cancel := context.WithCancel(ctx)
+	redisContext := context.TODO()
 	val := e.Client.Get(redisContext, "identifier/"+domain)
-	cancel()
 
 	if val.Err() != nil {
 		log.Debug(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
