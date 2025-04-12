@@ -186,9 +186,8 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	val, err := e.loadRecord(ctx, root)
 	if err != nil {
 		log.Debug(fmt.Errorf("could not get record for %s: %v", root, err))
+		return false
 	}
-
-	redisRecordFound := val != nil
 
 	// create rrs
 	var rrs []dns.RR
@@ -201,13 +200,13 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		)
 	}
 
-	if e.AddNs3 && redisRecordFound {
+	if e.AddNs3 {
 		authoritive = append(authoritive, newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
 	}
 
 	switch qtype {
 	case "TXT":
-		if sub == "_for-sale" && redisRecordFound && val.SidnIdcode != nil {
+		if sub == "_for-sale" && val.SidnIdcode != nil {
 			rrs = append(rrs, newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
@@ -222,21 +221,11 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		)
 	case "A":
 		if sub == "www" || sub == "" {
-			if redisRecordFound {
-				rrs = append(rrs, newA(fqdn, val.A))
-			} else {
-				rrs = append(rrs, newA(fqdn, "168.220.85.117"))
-			}
+			rrs = append(rrs, newA(fqdn, val.A))
 		}
 	case "AAAA":
-		if sub == "www" || sub == "" {
-			if redisRecordFound {
-				if val.Aaaa != nil {
-					rrs = append(rrs, newAAAA(fqdn, *val.Aaaa))
-				}
-			} else {
-				rrs = append(rrs, newAAAA(fqdn, "2a09:8280:1::50:73de:0"))
-			}
+		if sub == "www" || sub == "" && val.Aaaa != nil {
+			rrs = append(rrs, newAAAA(fqdn, *val.Aaaa))
 		}
 	}
 
