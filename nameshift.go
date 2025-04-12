@@ -44,10 +44,7 @@ type Nameshift struct {
 	TTL         uint32
 }
 
-func (e *Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
-	// log context error
-	log.Debug(fmt.Errorf("context error: %v", ctx.Err()))
-
+func (e *Nameshift) loadRecord(domain string) (*RedisRecord, error) {
 	redisContext := context.TODO()
 	val := e.Client.Get(redisContext, "identifier/"+domain)
 
@@ -174,9 +171,8 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 	log.Debug(fmt.Sprintf("Grabbing DNS for %s, root domain: %s, sub domain: %s", state.Name(), root, sub))
 
 	// lookup record in map
-	val, err := e.loadRecord(ctx, root)
+	val, err := e.loadRecord(root)
 	if err != nil {
-		log.Debug(fmt.Errorf("could not get record for %s: %v", root, err))
 		return false
 	}
 
