@@ -44,7 +44,7 @@ type Nameshift struct {
 	TTL         uint32
 }
 
-func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
+func (e *Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
 	val := e.Client.Get(ctx, "identifier/"+domain)
 	if val.Err() != nil {
 		log.Debug(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
@@ -62,7 +62,7 @@ func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord,
 
 // ServeDNS implements the plugin.Handler interface. This method gets called when nameshift is used
 // in a Server.
-func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (e *Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	if e.handleDns(ctx, w, r) {
 		return dns.RcodeSuccess, nil
 	}
@@ -71,7 +71,7 @@ func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 }
 
-func (e Nameshift) NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
+func (e *Nameshift) NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
 	return &dns.CAA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -85,7 +85,7 @@ func (e Nameshift) NewCAA(fqdn string, flag uint8, tag string, value string) dns
 	}
 }
 
-func (e Nameshift) newNS(fqdn string, authority string) dns.RR {
+func (e *Nameshift) newNS(fqdn string, authority string) dns.RR {
 	return &dns.NS{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -97,7 +97,7 @@ func (e Nameshift) newNS(fqdn string, authority string) dns.RR {
 	}
 }
 
-func (e Nameshift) newA(fqdn string, a string) dns.RR {
+func (e *Nameshift) newA(fqdn string, a string) dns.RR {
 	return &dns.A{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -109,7 +109,7 @@ func (e Nameshift) newA(fqdn string, a string) dns.RR {
 	}
 }
 
-func (e Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
+func (e *Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
 	return &dns.AAAA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -121,7 +121,7 @@ func (e Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
 	}
 }
 
-func (e Nameshift) newTXT(fqdn string, txt []string) dns.RR {
+func (e *Nameshift) newTXT(fqdn string, txt []string) dns.RR {
 	return &dns.TXT{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -133,7 +133,7 @@ func (e Nameshift) newTXT(fqdn string, txt []string) dns.RR {
 	}
 }
 
-func (e Nameshift) newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
+func (e *Nameshift) newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 	return &dns.SOA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -151,7 +151,7 @@ func (e Nameshift) newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 	}
 }
 
-func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) bool {
+func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) bool {
 	state := request.Request{W: w, Req: r}
 	qtype := state.Type()
 	fqdn := dns.Fqdn(state.Name())
@@ -227,4 +227,4 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 }
 
 // Name implements the Handler interface.
-func (e Nameshift) Name() string { return "nameshift" }
+func (e *Nameshift) Name() string { return "nameshift" }
