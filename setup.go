@@ -4,12 +4,13 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 const (
 	DefaultRedisAddress  = "127.0.0.1:6379"
 	DefaultRedisUsername = "default"
+	DefaultTTL           = 900
 )
 
 // init registers this plugin.
@@ -25,6 +26,7 @@ func setup(d *caddy.Controller) error {
 	prefix := ""
 	ns3 := false
 	ns := []string{}
+	ttl := DefaultTTL
 
 	for d.Next() {
 		key := d.Val()
@@ -59,6 +61,10 @@ func setup(d *caddy.Controller) error {
 			if value != "" {
 				ns = append(ns, value)
 			}
+		case "ttl":
+			if value != "" {
+				ttl = caddy.Duration(value).Seconds()
+			}
 		}
 	}
 
@@ -77,7 +83,7 @@ func setup(d *caddy.Controller) error {
 			Prefix:      prefix,
 			AddNs3:      ns3,
 			Nameservers: ns,
-			zone:        make(map[string]RedisRecord),
+			TTL:         uint32(ttl),
 		}
 	})
 

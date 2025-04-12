@@ -9,14 +9,12 @@ import (
 	"math"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 	"golang.org/x/net/publicsuffix"
 
 	"github.com/miekg/dns"
@@ -25,11 +23,6 @@ import (
 // Define log to be a logger with the plugin name in it. This way we can just use log.Info and
 // friends to log.
 var log = clog.NewWithPlugin("nameshift")
-var mutex sync.RWMutex = sync.RWMutex{}
-
-const (
-	TTL = 900
-)
 
 var serial uint32
 
@@ -48,14 +41,10 @@ type Nameshift struct {
 	Prefix      string
 	AddNs3      bool
 	Nameservers []string
-
-	zone map[string]RedisRecord
+	TTL         uint32
 }
 
 func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
 	val := e.Client.Get(ctx, "identifier/"+domain)
 	if val.Err() != nil {
 		log.Debug(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
@@ -75,9 +64,6 @@ func (e Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord,
 // in a Server.
 func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	if e.handleDns(ctx, w, r) {
-		// Export metric with the server label set to the current server handling the request.
-		requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
-
 		return dns.RcodeSuccess, nil
 	}
 
@@ -85,13 +71,13 @@ func (e Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 }
 
-func NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
+func (e Nameshift) NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
 	return &dns.CAA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeCAA,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		Flag:  flag,
 		Tag:   tag,
@@ -99,61 +85,61 @@ func NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
 	}
 }
 
-func newNS(fqdn string, authority string) dns.RR {
+func (e Nameshift) newNS(fqdn string, authority string) dns.RR {
 	return &dns.NS{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeNS,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		Ns: authority,
 	}
 }
 
-func newA(fqdn string, a string) dns.RR {
+func (e Nameshift) newA(fqdn string, a string) dns.RR {
 	return &dns.A{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		A: net.ParseIP(a),
 	}
 }
 
-func newAAAA(fqdn string, aaaa string) dns.RR {
+func (e Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
 	return &dns.AAAA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeAAAA,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		AAAA: net.ParseIP(aaaa),
 	}
 }
 
-func newTXT(fqdn string, txt []string) dns.RR {
+func (e Nameshift) newTXT(fqdn string, txt []string) dns.RR {
 	return &dns.TXT{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeTXT,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		Txt: txt,
 	}
 }
 
-func newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
+func (e Nameshift) newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
 	return &dns.SOA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
 			Rrtype: dns.TypeSOA,
 			Class:  dns.ClassINET,
-			Ttl:    TTL,
+			Ttl:    e.TTL,
 		},
 		Ns:      mainNs,
 		Mbox:    "hostmaster.nameshift.com.",
@@ -196,36 +182,36 @@ func (e Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	for _, value := range e.Nameservers {
 		authoritive = append(
 			authoritive,
-			newNS(fqdn, value),
+			e.newNS(fqdn, value),
 		)
 	}
 
 	if e.AddNs3 {
-		authoritive = append(authoritive, newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
+		authoritive = append(authoritive, e.newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
 	}
 
 	switch qtype {
 	case "TXT":
 		if sub == "_for-sale" && val.SidnIdcode != nil {
-			rrs = append(rrs, newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
+			rrs = append(rrs, e.newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
-		rrs = append(rrs, newSOA(e.Nameservers[0], fqdn, serial))
+		rrs = append(rrs, e.newSOA(e.Nameservers[0], fqdn, serial))
 	case "NS":
 		rrs = append(rrs, authoritive...)
 	case "CAA":
 		rrs = append(
 			rrs,
-			NewCAA(fqdn, 0, "issue", "letsencrypt.org"),
-			NewCAA(fqdn, 0, "issue", "pki.goog"),
+			e.NewCAA(fqdn, 0, "issue", "letsencrypt.org"),
+			e.NewCAA(fqdn, 0, "issue", "pki.goog"),
 		)
 	case "A":
 		if sub == "www" || sub == "" {
-			rrs = append(rrs, newA(fqdn, val.A))
+			rrs = append(rrs, e.newA(fqdn, val.A))
 		}
 	case "AAAA":
 		if sub == "www" || sub == "" && val.Aaaa != nil {
-			rrs = append(rrs, newAAAA(fqdn, *val.Aaaa))
+			rrs = append(rrs, e.newAAAA(fqdn, *val.Aaaa))
 		}
 	}
 
