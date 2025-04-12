@@ -45,6 +45,9 @@ type Nameshift struct {
 }
 
 func (e *Nameshift) loadRecord(ctx context.Context, domain string) (*RedisRecord, error) {
+	// log context error
+	log.Debug(fmt.Errorf("context error: %v", ctx.Err()))
+
 	val := e.Client.Get(ctx, "identifier/"+domain)
 	if val.Err() != nil {
 		log.Debug(fmt.Errorf("unable to get record for %s: %v", domain, val.Err()))
