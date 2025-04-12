@@ -1,6 +1,8 @@
 package nameshift
 
 import (
+	"strconv"
+
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
@@ -10,7 +12,7 @@ import (
 const (
 	DefaultRedisAddress  = "127.0.0.1:6379"
 	DefaultRedisUsername = "default"
-	DefaultTTL           = 900
+	DefaultTTL           = uint32(900)
 )
 
 // init registers this plugin.
@@ -63,7 +65,11 @@ func setup(d *caddy.Controller) error {
 			}
 		case "ttl":
 			if value != "" {
-				ttl = caddy.Duration(value).Seconds()
+				duration, err := strconv.ParseUint(value, 10, 32)
+				if err != nil {
+					return err
+				}
+				ttl = uint32(duration)
 			}
 		}
 	}
@@ -83,7 +89,7 @@ func setup(d *caddy.Controller) error {
 			Prefix:      prefix,
 			AddNs3:      ns3,
 			Nameservers: ns,
-			TTL:         uint32(ttl),
+			TTL:         ttl,
 		}
 	})
 
