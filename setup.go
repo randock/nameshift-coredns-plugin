@@ -1,15 +1,18 @@
 package nameshift
 
 import (
+	"strconv"
+
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 const (
 	DefaultRedisAddress  = "127.0.0.1:6379"
 	DefaultRedisUsername = "default"
+	DefaultTTL           = uint32(900)
 )
 
 // init registers this plugin.
@@ -25,6 +28,7 @@ func setup(d *caddy.Controller) error {
 	prefix := ""
 	ns3 := false
 	ns := []string{}
+	ttl := DefaultTTL
 
 	for d.Next() {
 		key := d.Val()
@@ -59,6 +63,14 @@ func setup(d *caddy.Controller) error {
 			if value != "" {
 				ns = append(ns, value)
 			}
+		case "ttl":
+			if value != "" {
+				duration, err := strconv.ParseUint(value, 10, 32)
+				if err != nil {
+					return err
+				}
+				ttl = uint32(duration)
+			}
 		}
 	}
 
@@ -71,13 +83,13 @@ func setup(d *caddy.Controller) error {
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(d).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return Nameshift{
+		return &Nameshift{
 			Next:        next,
 			Client:      client,
 			Prefix:      prefix,
 			AddNs3:      ns3,
 			Nameservers: ns,
-			zone:        make(map[string]RedisRecord),
+			TTL:         ttl,
 		}
 	})
 
