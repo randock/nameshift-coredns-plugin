@@ -218,9 +218,19 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative = true
-	m.Answer = rrs
-	m.Ns = authoritive
+	m.RecursionAvailable = false
+	m.Answer = append(m.Answer, rrs...)
+
+	// if we have not records, answer with soa
+	if len(rrs) == 0 {
+		m.Ns = append(m.Ns, e.newSOA(e.Nameservers[0], fqdn, serial))
+	} else {
+		// authoritive is the root zone for the TLD for NS
+		if qtype != "NS" {
+			m.Authoritative = true
+			m.Ns = append(m.Ns, authoritive...)
+		}
+	}
 
 	w.WriteMsg(m)
 
