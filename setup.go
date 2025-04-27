@@ -74,6 +74,11 @@ func setup(d *caddy.Controller) error {
 		}
 	}
 
+	// Validate that at least one nameserver is configured
+	if len(ns) == 0 {
+		return d.Err("at least one nameserver must be configured")
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     address,
 		Username: username,

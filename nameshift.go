@@ -100,6 +100,11 @@ func (e *Nameshift) newNS(fqdn string, authority string) dns.RR {
 }
 
 func (e *Nameshift) newA(fqdn string, a string) dns.RR {
+	ip := net.ParseIP(a)
+	if ip == nil {
+		log.Error(fmt.Errorf("invalid IP address: %s", a))
+		return nil
+	}
 	return &dns.A{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -107,11 +112,16 @@ func (e *Nameshift) newA(fqdn string, a string) dns.RR {
 			Class:  dns.ClassINET,
 			Ttl:    e.TTL,
 		},
-		A: net.ParseIP(a),
+		A: ip,
 	}
 }
 
 func (e *Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
+	ip := net.ParseIP(aaaa)
+	if ip == nil {
+		log.Error(fmt.Errorf("invalid IPv6 address: %s", aaaa))
+		return nil
+	}
 	return &dns.AAAA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -119,7 +129,7 @@ func (e *Nameshift) newAAAA(fqdn string, aaaa string) dns.RR {
 			Class:  dns.ClassINET,
 			Ttl:    e.TTL,
 		},
-		AAAA: net.ParseIP(aaaa),
+		AAAA: ip,
 	}
 }
 
@@ -136,6 +146,11 @@ func (e *Nameshift) newTXT(fqdn string, txt []string) dns.RR {
 }
 
 func (e *Nameshift) newSOA(mainNs string, fqdn string, serial uint32) dns.RR {
+	if mainNs == "" {
+		log.Error("empty nameserver provided for SOA record")
+		return nil
+	}
+
 	return &dns.SOA{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
@@ -172,7 +187,7 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 
 	// lookup record in map
 	val, err := e.loadRecord(root)
-	if err != nil {
+	if err != nil || val == nil {
 		return false
 	}
 
@@ -188,7 +203,11 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 	}
 
 	if e.AddNs3 {
-		authoritive = append(authoritive, e.newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
+		if val.Identifier == "" {
+			log.Error("empty identifier found when trying to add ns3")
+		} else {
+			authoritive = append(authoritive, e.newNS(fqdn, val.Identifier+".ns3.nameshift.com."))
+		}
 	}
 
 	switch qtype {
@@ -197,7 +216,10 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 			rrs = append(rrs, e.newTXT(fqdn, []string{"idcode=" + *val.SidnIdcode}))
 		}
 	case "SOA":
-		rrs = append(rrs, e.newSOA(e.Nameservers[0], fqdn, serial))
+		soa := e.newSOA(e.Nameservers[0], fqdn, serial)
+		if soa != nil {
+			rrs = append(rrs, soa)
+		}
 	case "NS":
 		rrs = append(rrs, authoritive...)
 	case "CAA":
@@ -207,20 +229,39 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 			e.NewCAA(fqdn, 0, "issue", "pki.goog"),
 		)
 	case "A":
-		if sub == "www" || sub == "" {
-			rrs = append(rrs, e.newA(fqdn, val.A))
+		if (sub == "www" || sub == "") && val.A != "" {
+			a := e.newA(fqdn, val.A)
+			if a != nil {
+				rrs = append(rrs, a)
+			}
 		}
 	case "AAAA":
-		if sub == "www" || sub == "" && val.Aaaa != nil {
-			rrs = append(rrs, e.newAAAA(fqdn, *val.Aaaa))
+		if (sub == "www" || sub == "") && val.Aaaa != nil {
+			aaaa := e.newAAAA(fqdn, *val.Aaaa)
+			if aaaa != nil {
+				rrs = append(rrs, aaaa)
+			}
 		}
 	}
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative = true
-	m.Answer = rrs
-	m.Ns = authoritive
+	m.RecursionAvailable = false
+	m.Answer = append(m.Answer, rrs...)
+
+	// if we have not records, answer with soa
+	if len(rrs) == 0 {
+		soa := e.newSOA(e.Nameservers[0], fqdn, serial)
+		if soa != nil {
+			m.Ns = append(m.Ns, soa)
+		}
+	} else {
+		// authoritive is the root zone for the TLD for NS
+		if qtype != "NS" {
+			m.Authoritative = true
+			m.Ns = append(m.Ns, authoritive...)
+		}
+	}
 
 	w.WriteMsg(m)
 
