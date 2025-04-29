@@ -248,6 +248,7 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 	m.SetReply(r)
 	m.RecursionAvailable = false
 	m.Answer = append(m.Answer, rrs...)
+	m.Authoritative = true
 
 	// if we have not records, answer with soa
 	if len(rrs) == 0 {
@@ -256,9 +257,7 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 			m.Ns = append(m.Ns, soa)
 		}
 	} else {
-		// authoritive is the root zone for the TLD for NS
 		if qtype != "NS" {
-			m.Authoritative = true
 			m.Ns = append(m.Ns, authoritive...)
 		}
 	}
