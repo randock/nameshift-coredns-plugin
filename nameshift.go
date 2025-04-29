@@ -257,10 +257,8 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 		}
 	} else {
 		// authoritive is the root zone for the TLD for NS
-		if qtype != "NS" {
-			m.Authoritative = true
-			m.Ns = append(m.Ns, authoritive...)
-		}
+		m.Authoritative = true
+		m.Ns = append(m.Ns, authoritive...)
 	}
 
 	w.WriteMsg(m)
