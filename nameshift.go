@@ -73,6 +73,19 @@ func (e *Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 }
 
+func (e *Nameshift) newMX(fqdn string, preference uint8, mx string) dns.RR {
+	return &dns.MX{
+		Hdr: dns.RR_Header{
+			Name:   fqdn,
+			Rrtype: dns.TypeMX,
+			Class:  dns.ClassINET,
+			Ttl:    e.TTL,
+		},
+		Preference: preference,
+		Mx:         mx,
+	}
+}
+
 func (e *Nameshift) NewCAA(fqdn string, flag uint8, tag string, value string) dns.RR {
 	return &dns.CAA{
 		Hdr: dns.RR_Header{
@@ -228,6 +241,8 @@ func (e *Nameshift) handleDns(ctx context.Context, w dns.ResponseWriter, r *dns.
 			e.NewCAA(fqdn, 0, "issue", "letsencrypt.org"),
 			e.NewCAA(fqdn, 0, "issue", "pki.goog"),
 		)
+	case "MX":
+		rrs = append(rrs, e.newMX(fqdn, 0, "."))
 	case "A":
 		if (sub == "www" || sub == "") && val.A != "" {
 			a := e.newA(fqdn, val.A)
