@@ -73,7 +73,7 @@ func (e *Nameshift) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	return plugin.NextOrFailure(e.Name(), e.Next, ctx, w, r)
 }
 
-func (e *Nameshift) newMX(fqdn string, preference uint8, mx string) dns.RR {
+func (e *Nameshift) newMX(fqdn string, preference uint16, mx string) dns.RR {
 	return &dns.MX{
 		Hdr: dns.RR_Header{
 			Name:   fqdn,
